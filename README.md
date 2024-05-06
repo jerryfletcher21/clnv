@@ -28,23 +28,35 @@ clnv[isualizer]), converting the json output into tables easier to read.
 To use it without insallation:
 ```
 export CLN_BIN=<lightning-cli-bin>
-clnv <action>
+
+./clnv --help
 ```
 
 To install it so that can be used from everywhere.
-Will install scripts in ~/.local/share/clnv and a binary in asdf
-~/.local/bin
+
+Will install scripts in ~/.local/share/clnv and a simple wrapper around
+clnv that sets CLN_BIN named <name-of-the-script> in ~/.local/bin
 ```
 CLNV_NAME=<name-of-the-script> CLN_BIN=<lightning-cli-bin> make install
+
+<name-of-the-script> --help
 ```
-Then <name-of-the-script> can be executed from everywhere
+Then <name-of-the-script> can be executed from everywhere (if
+~/.local/bin is in your PATH)
 
 If you have multiple core lightning in the same machine:
 ```
 make install-data
 CLNV_NAME=<name-of-the-first-script> CLN_BIN=<first-lightning-cli-bin> make install-script
 CLNV_NAME=<name-of-the-second-script> CLN_BIN=<second-lightning-cli-bin> make install-script
+
+<name-of-the-first-script> --help
+<name-of-the-second-script> --help
 ```
+
+Source completions/clnv.bash-completion in ~/.bashrc
+
+If the bash completion package is installed there are better completions
 
 ## License
 
