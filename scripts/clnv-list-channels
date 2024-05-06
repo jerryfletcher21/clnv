@@ -1,0 +1,182 @@
+#!/bin/sh
+
+info=$(cat << EOF
+clnv list-channels [-a|--all] [-p|--pending] [--no-address]
+
+visualizer for listchannels
+EOF
+)
+
+all_channels=false
+just_pending=false
+address=true
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            echo "$info"
+            exit 0
+        ;;
+        -a|--all)
+            all_channels=true
+        ;;
+        -p|--pending)
+            just_pending=true
+        ;;
+        --no-address)
+            address=false
+        ;;
+        *)
+            echo "error: $1 not recognized" >&2
+            echo "$info" >&2
+            exit 1
+        ;;
+    esac
+    shift 1
+done
+
+lightning_node_alias() {
+    $CLN_BIN listnodes "$1" |
+    jq -r '.nodes[].alias' |
+    tr -d -c '[:print:]'
+}
+
+lightning_listchannels() {
+    $CLN_BIN  listchannels -k "$1" |
+    jq -r '.channels[] | "\(.source) \(.destination) \(.short_channel_id) \(.public) \(.amount_msat) \(.base_fee_millisatoshi) \(.fee_per_millionth)"'
+}
+
+add_zero_before_decimal_with_plus() {
+    number="$(cat)"
+    case "$number" in
+        -.*)
+            echo "-0.$(echo "$number" | cut -d "." -f 2-)"
+        ;;
+        .*)
+            echo "+0${number}"
+        ;;
+        *)
+            echo "$number"
+        ;;
+    esac
+}
+
+add_zero_before_decimal() {
+    number="$(cat)"
+    case "$number" in
+        .*)
+            echo "0${number}"
+        ;;
+        *)
+            echo "$number"
+        ;;
+    esac
+}
+
+# 1000 is 0.1%
+percentage_from_ppm() {
+    printf "%.4f%%\n" "$(echo "scale=4; $1 / 10000" | bc)"
+}
+
+msat_to_sat() {
+    msat="$(cat)"
+    if [ "$msat" = "null" ]; then
+        echo "$msat"
+    else
+        echo "scale=3; $msat / (10 ^ 3)" | bc | add_zero_before_decimal
+    fi
+}
+
+msat_to_sat_round() {
+    msat="$(cat)"
+    if [ "$msat" = "null" ]; then
+        echo "$msat"
+    else
+        echo "scale=0; $msat / (10 ^ 3)" | bc | add_zero_before_decimal
+    fi
+}
+
+node_id="$($CLN_BIN getinfo | jq -r '.id')"
+# node_alias="$(lightning_node_alias "$node_id")"
+
+destination_channels="$(lightning_listchannels destination="$node_id")"
+
+$CLN_BIN listpeerchannels |
+jq -r '.channels[] | "\(.peer_id)\n\(.peer_connected)\n\(.state)\n\(.short_channel_id)\n\(.private)\n\(.total_msat)\n\(.fee_base_msat)\n\(.fee_proportional_millionths)\n\(.spendable_msat)\n\(.receivable_msat)\n\(.htlcs | length)"' |
+while true; do
+    read -r destination || break
+    read -r connected || break
+    read -r state || break
+    read -r short_id || break
+    read -r private_status || break
+    read -r msat || break
+    read -r source_base_fee || break
+    read -r source_ppm_fee || break
+    read -r spendable_msat || break
+    read -r receivable_msat || break
+    read -r htlcs_length || break
+
+    if [ "$CLNV_PRIVATE" = true ] && [ "$private_status" = true ]; then
+        continue
+    fi
+    if [ "$all_channels" = false ] && [ "$state" != "CHANNELD_NORMAL" ]; then
+        continue
+    fi
+
+    if [ "$just_pending" = true ] && [ "$htlcs_length" -lt 1 ]; then
+        continue
+    fi
+
+    dest_alias="$(lightning_node_alias "$destination")"
+
+    source_percentage_fee="$(percentage_from_ppm "$source_ppm_fee")"
+
+    dest_line="$(echo "$destination_channels" | grep "$short_id")"
+    if [ -n "$dest_line" ]; then
+        dest_base_fee="$(echo "$dest_line" | cut -d " " -f 6)"
+        dest_ppm_fee="$(echo "$dest_line" | cut -d " " -f 7)"
+        dest_percentage_fee="$(percentage_from_ppm "$dest_ppm_fee")"
+    else
+        # strange occurance channels with different ids
+        dest_base_fee="null"
+        dest_percentage_fee="null"
+        # dest_base_fee="-1000"
+        # dest_percentage_fee="-1"
+    fi
+
+    satoshis="$(echo "$msat" | msat_to_sat_round)"
+
+    if [ "$connected" = true ]; then
+        connected_binary=1
+    else
+        connected_binary=0
+    fi
+
+    spendable="$(echo "$spendable_msat" | msat_to_sat_round)"
+    receivable="$(echo "$receivable_msat" | msat_to_sat_round)"
+    position="$(echo "scale=2; ($spendable - $receivable) / $satoshis" | bc | add_zero_before_decimal_with_plus)"
+
+    printf "%-15s %9s %5s %3s %8s %8s %8s %8s %1s " \
+        "$short_id" \
+        "$satoshis" \
+        "$position" "$htlcs_length" \
+        "$(echo "$source_base_fee" | msat_to_sat)" "$source_percentage_fee" \
+        "$(echo "$dest_base_fee" | msat_to_sat)" "$dest_percentage_fee" \
+        "$connected_binary"
+
+    if [ "$all_channels" = true ]; then
+        printf "%-25s " "$state"
+        dest_alias_cut="$(echo "$dest_alias" | cut -b -6)"
+    fi
+    if [ "$all_channels" = false ] || [ "$address" = false ]; then
+        printf "%9s %9s " "$spendable" "$receivable"
+        dest_alias_cut="$(echo "$dest_alias" | cut -b -12)"
+    fi
+
+    if [ "$address" = true ]; then
+        printf "%s %s \n" "$destination" "$dest_alias_cut"
+    else
+        printf "%s \n" "$dest_alias"
+    fi
+done |
+sort

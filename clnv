@@ -1,0 +1,73 @@
+#!/bin/sh
+
+project_home="$(dirname "$0")"
+export CLNV_HOME="$project_home"
+scripts_home="$project_home/scripts"
+
+actions="$(
+    find "$scripts_home" -type f |
+    rev |
+    cut -d "/" -f 1 |
+    rev |
+    cut -d "-" -f 2- |
+    sort
+)"
+
+info=$(cat << EOF
+clnv action
+
+CLN_BIN environment variable should be set
+CLNV_PRIVATE environment variable can be set
+
+actions:
+
+$actions
+EOF
+)
+
+if [ "$#" -lt 1 ]; then
+    echo "error: insert action" >&2
+    exit 1
+fi
+action="$1"
+shift 1
+
+case "$action" in
+    -h|--help)
+        echo "$info"
+        exit 0
+    ;;
+    -*)
+        echo "error: options $action not recognized" >&2
+        exit 1
+    ;;
+    list-actions)
+        printf "%s\n" "$actions"
+    ;;
+    *)
+        if [ -z "$CLN_BIN" ]; then
+            echo "error: set CLN_BIN" >&2
+            exit 1
+        fi
+        if ! command -v "$CLN_BIN" >/dev/null 2>&1; then
+            echo "error: $CLN_BIN is not a command" >&2
+            exit 1
+        fi
+
+        if [ -z "$CLNV_PRIVATE" ]; then
+            export CLNV_PRIVATE=false
+        fi
+
+        if [ -z "$COLUMNS" ]; then
+            column="$(stty size | cut -d " " -f 2)"
+            export COLUMNS="$column"
+        fi
+
+        clnv_script="$scripts_home/clnv-${action}"
+        if [ ! -x "$clnv_script" ]; then
+            echo "error: action $action not recognized" >&2
+            exit 1
+        fi
+        $clnv_script "$@"
+    ;;
+esac

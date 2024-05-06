@@ -1,0 +1,42 @@
+#!/bin/sh
+
+info=$(cat << EOF
+clnv pay-status label
+
+visualizer for paystatus from a label
+EOF
+)
+
+if [ "$#" -lt 1 ]; then
+    echo "error: insert label" >&2
+    exit 1
+fi
+label="$1"
+shift 1
+case "$label" in
+    -h|--help)
+        echo "$info"
+        exit 0
+    ;;
+esac
+
+bolt11s="$(
+    $CLN_BIN listpays |
+    jq -r '.pays[] | "\(.bolt11) \(.label)"' |
+    grep -F "$label" |
+    cut -d " " -f 1 |
+    uniq
+)"
+
+# jq -r '.pay[].attempts[].failure.data | "\(.erring_channel) \(.failcodename)"'
+for bolt11 in $bolt11s; do
+    $CLN_BIN paystatus "$bolt11" |
+    jq -r '.pay[].attempts[].failure | "\(.data.erring_channel) \(.message)"' |
+    grep -v '^null null$' |
+    while read -r line; do
+        channel="$(printf "%s\n" "$line" | cut -d " " -f 1)"
+        message="$(printf "%s\n" "$line" | cut -d " " -f 2-)"
+
+        printf "%-14s %s\n" "$channel" "$message"
+    done
+done

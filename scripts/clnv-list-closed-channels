@@ -1,0 +1,64 @@
+#!/bin/sh
+
+info=$(cat << EOF
+clnv list-closed-channels
+
+visualizer for listclosedchannels
+EOF
+)
+
+if [ "$#" -ge 1 ]; then
+    case "$1" in
+        -h|--help)
+            echo "$info"
+            exit 0
+        ;;
+    esac
+fi
+
+bool_string_to_number() {
+    if [ "$1" = true ]; then
+        echo "1"
+    else
+        echo "0"
+    fi
+}
+
+msat_to_sat() {
+    echo "scale=0; $1 / (10 ^ 3)" | bc
+}
+
+lightning_node_alias() {
+    if [ "$1" != "null" ]; then
+        $CLN_NODE listnodes "$1" |
+        jq -r '.nodes[].alias' |
+        tr -d -c '[:print:]'
+    else
+        printf "%s\n" "$1"
+    fi
+}
+
+# '.closedchannels[].peer_id // ""'
+
+$CLN_BIN listclosedchannels |
+jq -r '.closedchannels[] | "\(.peer_id)\n\(.short_channel_id)\n\(.opener)\n\(.closer)\n\(.private)\n\(.total_msat)\n\(.final_to_us_msat)\n\(.close_cause)"' |
+while true; do
+    read -r peer_id || break
+    read -r short_channel_id || break
+    read -r opener || break
+    read -r closer || break
+    read -r private_status || break
+    read -r total_msat || break
+    read -r final_to_us_msat || break
+    read -r close_cause || break
+
+    if [ "$CLNV_PRIVATE" = true ] && [ "$private_status" = true ]; then
+        continue
+    fi
+
+    printf "%-66s %-15s %10s %10s %-6s %-6s %1s %-8s %s\n" \
+        "$peer_id" "$short_channel_id" \
+        "$(msat_to_sat "$total_msat")" "$(msat_to_sat "$final_to_us_msat")" \
+        "$opener" "$closer" "$(bool_string_to_number "$private_status")" "$close_cause" \
+        "$(lightning_node_alias "$peer_id")"
+done

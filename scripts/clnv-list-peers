@@ -1,0 +1,32 @@
+#!/bin/sh
+
+info=$(cat << EOF
+clnv list-peers
+
+no longer useful after listpeerchannels
+EOF
+)
+
+if [ "$#" -ge 1 ]; then
+    case "$1" in
+        -h|--help)
+            echo "$info"
+            exit 0
+        ;;
+    esac
+fi
+
+# ./lnc-list-peers | jq -r '.channels[].receivable_msatoshi' | tr '\n' '+' | xargs -I {} echo "{}0" | bc
+# ./lnc-list-peers | jq -r '.channels[].spendable_msatoshi' | tr '\n' '+' | xargs -I {} echo "{}0" | bc
+
+our_id="$($CLN_BIN getinfo | jq -r '.id')"
+
+ids="$(
+    $CLN_BIN listchannels -k destination="$our_id" |
+    jq -r '.channels[].source'
+)"
+
+for id in $ids; do
+    $CLN_BIN listpeers "$id" | jq -r '.peers[]'
+done |
+jq -r '.'

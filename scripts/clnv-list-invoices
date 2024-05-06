@@ -1,0 +1,184 @@
+#!/bin/sh
+
+invoice_type="big"
+number=32
+invoice_status="all"
+
+info=$(cat << EOF
+clnv list-invoices [--small, --big, --all] [--long] [--bolt] [number/all] [status]
+
+visualizer for listinvoices
+
+default action is $invoice_type
+
+default number is $number
+
+status can be unpaid, paid, expired or all
+default status is $invoice_status
+EOF
+)
+
+is_uint_greater_than_zero_or_all() {
+    case "$1" in
+        all)
+            return 0
+        ;;
+        ''|0|*[!0-9]*)
+            return 1
+        ;;
+        *)
+            return 0
+        ;;
+    esac
+}
+
+min_sats=8
+
+print_long_description=false
+print_bolt=false
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            echo "$info"
+            exit 0
+        ;;
+        --small|--big|--all)
+            invoice_type="$(printf "%s\n" "$1" | cut -d "-" -f 3)"
+        ;;
+        --long)
+            print_long_description=true
+        ;;
+        --bolt)
+            if [ "$CLNV_PRIVATE" = true ]; then
+                echo "error: can not print bolt in private mode" >&2
+                exit 1
+            fi
+            print_bolt=true
+        ;;
+        -*)
+            echo "error: option $1 not recognized" >&2
+            exit 1
+        ;;
+        *)
+            break
+        ;;
+    esac
+    shift 1
+done
+
+if [ "$#" -gt 0 ]; then
+    number="$1"
+    shift 1
+    if ! is_uint_greater_than_zero_or_all "$number"; then
+        echo "error: $number is not a number greater than 0 or the string 'all'" >&2
+        exit 1
+    fi
+fi
+
+if [ "$#" -gt 0 ]; then
+    invoice_status="$1"
+    shift 1
+    case "$invoice_status" in
+        unpaid|paid|expired|all) ;;
+        *)
+            echo "error: invoice status $invoice_status does not exists" >&2
+            exit 1
+        ;;
+    esac
+fi
+
+timestamp_to_date() {
+    if [ "$1" != "null" ]; then
+        date -d @"$1" +"%Y/%m/%d %H:%M"
+    # else
+    #     echo "$1"
+    fi
+}
+
+msat_to_sat() {
+    msat="$(cat)"
+    if [ "$msat" = "null" ]; then
+        echo "0"
+    else
+        echo "$msat / (10 ^ 3)" | bc
+    fi
+}
+
+jq_inside="\(.status) \(.amount_msat) \(.amount_received_msat) \(.paid_at) \(.bolt11) \(.label) \(.description)"
+jq_argument=$(cat << EOF
+.invoices[] | "$jq_inside"
+EOF
+)
+
+$CLN_BIN listinvoices |
+jq -r "$jq_argument" |
+while read -r line; do
+    status="$(printf "%s\n" "$line" | cut -d " " -f 1)"
+    case "$invoice_status" in
+        all|"$status")
+            printf "%s\n" "$line"
+        ;;
+    esac
+done |
+while read -r line; do
+    sat="$(printf "%s\n" "$line" | cut -d " " -f 2 | cut -d "m" -f 1 | msat_to_sat)"
+    if [ "$sat" -eq 0 ]; then
+        sat="$(printf "%s\n" "$line" | cut -d " " -f 3 | cut -d "m" -f 1 | msat_to_sat)"
+    fi
+    case "$invoice_type" in
+        all)
+            printf "%s\n" "$line"
+        ;;
+        small)
+            if [ "$sat" -le "$min_sats" ]; then
+                printf "%s\n" "$line"
+            fi
+        ;;
+        big)
+            if [ "$sat" -gt "$min_sats" ]; then
+                printf "%s\n" "$line"
+            fi
+        ;;
+    esac
+done |
+if [ "$number" != "all" ]; then
+    tail -n "$number"
+else
+    cat
+fi |
+while read -r line; do
+    status="$(echo "$line" | cut -d " " -f 1)"
+    amount_msat="$(echo "$line" | cut -d " " -f 2)"
+    amount_received_msat="$(echo "$line" | cut -d " " -f 3)"
+    paid_at_timestamp="$(echo "$line" | cut -d " " -f 4)"
+    bolt11="$(echo "$line" | cut -d " " -f 5)"
+    label="$(echo "$line" | cut -d " " -f 6)"
+    description="$(echo "$line" | cut -d " " -f 7-)"
+
+    amount_sat="$(echo "$amount_msat" | cut -d "m" -f 1 | msat_to_sat)"
+    amount_received_sat="$(echo "$amount_received_msat" | cut -d "m" -f 1 | msat_to_sat)"
+    fee="$(( amount_sat - amount_received_sat ))"
+
+    created_at_timestamp="$($CLN_BIN decode "$bolt11" | jq -r '. | "\(.created_at)"')"
+
+    created_at="$(timestamp_to_date "$created_at_timestamp")"
+    paid_at="$(timestamp_to_date "$paid_at_timestamp")"
+
+    if [ "$print_long_description" = false ]; then
+        description="$(echo "$description" | cut -b -40)"
+    fi
+
+    if [ "$CLNV_PRIVATE" = true ]; then
+        label="a nice label"
+        description="a nice description"
+    fi
+
+    printf "%-8s %9s %9s %16s %16s %-64s %s\n" \
+        "$status" "$amount_received_sat" "$fee" \
+        "$created_at" "$paid_at" \
+        "$label" "$description"
+    if [ "$print_bolt" = true ]; then
+        printf "%s\n" "$bolt11"
+    fi
+done

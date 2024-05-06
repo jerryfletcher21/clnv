@@ -1,0 +1,77 @@
+#!/bin/sh
+
+info=$(cat << EOF
+clnv list-pending-htlcs
+
+visualizer for pending htlcs (taken from listpeerchannels)
+EOF
+)
+
+if [ "$#" -ge 1 ]; then
+    case "$1" in
+        -h|--help)
+            echo "$info"
+            exit 0
+        ;;
+    esac
+fi
+
+add_zero_before_decimal() {
+    number="$(cat)"
+    case "$number" in
+        .*)
+            echo "0${number}"
+        ;;
+        *)
+            echo "$number"
+        ;;
+    esac
+}
+
+msat_to_sat_round() {
+    msat="$(cat)"
+    if [ "$msat" = "null" ]; then
+        echo "$msat"
+    else
+        echo "scale=0; $msat / (10 ^ 3)" |
+        bc |
+        add_zero_before_decimal
+    fi
+}
+
+lightning_node_alias() {
+    $CLN_BIN listnodes "$1" |
+    jq -r '.nodes[].alias' |
+    tr -d -c '[:print:]'
+}
+
+lightning_list_pay_label() {
+    $CLN_BIN -k listpays payment_hash="$1" |
+    jq -r '.pays[].label'
+}
+
+block_count="$(btc getblockcount)"
+
+$CLN_BIN listpeerchannels |
+jq -r '.channels[] | "\(.htlcs[] | "\(.direction)\n\(.amount_msat)\n\(.expiry)\n\(.payment_hash)")\n\(.peer_id)"' |
+while true; do
+    read -r direction || break
+    read -r amount_msat || break
+    read -r expiry || break
+    read -r payment_hash || break
+    read -r peer_id || break
+
+    amount_sat="$(printf "%s\n" "$amount_msat" | msat_to_sat_round)"
+
+    difference="$(( expiry - block_count ))"
+
+    label="$(lightning_list_pay_label "$payment_hash")"
+
+    node_alias="$(lightning_node_alias "$peer_id")"
+
+    printf "%-7s %5s %9s %-3s %-24s %s\n" \
+        "$expiry" "$difference" \
+        "$amount_sat" "$direction" \
+        "$(printf "%s\n" "$node_alias" | cut -b -24)" "$label"
+done |
+sort -n

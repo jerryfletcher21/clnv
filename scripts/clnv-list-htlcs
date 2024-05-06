@@ -1,0 +1,131 @@
+#!/bin/sh
+
+default_number=32
+
+info=$(cat << EOF
+clnv list-htlcs [--no-hash] [--alias] [number/all] [channel-id]
+
+visualizer for listhtlcs
+default number is $default_number
+EOF
+)
+
+is_uint_greater_than_zero_or_all() {
+    case "$1" in
+        all)
+            return 0
+        ;;
+        ''|0|*[!0-9]*)
+            return 1
+        ;;
+        *)
+            return 0
+        ;;
+    esac
+}
+
+print_hash=true
+print_alias=false
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            echo "$info"
+            exit 0
+        ;;
+        --no-hash)
+            print_hash=false
+        ;;
+        --alias)
+            print_alias=true
+        ;;
+        -*)
+            echo "error: option $1 not recognized" >&2
+            exit 1
+        ;;
+        *)
+            break
+        ;;
+    esac
+    shift 1
+done
+
+if [ "$#" -gt 0 ]; then
+    number="$1"
+    shift 1
+    if ! is_uint_greater_than_zero_or_all "$number"; then
+        echo "error: $number is not a number greater than 0 or the string 'all'" >&2
+        exit 1
+    fi
+else
+    number="$default_number"
+fi
+
+timestamp_to_date() {
+    if [ "$1" != "null" ]; then
+        date -d @"$1" +"%Y/%m/%d %H:%M"
+    # else
+    #     echo "$1"
+    fi
+}
+
+msat_to_sat() {
+    msat="$(cat)"
+    echo "$msat / (10 ^ 3)" | bc
+}
+
+if [ "$print_alias" = true ]; then
+    our_id="$($CLN_BIN getinfo | jq -r '.id')"
+fi
+
+lightning_node_alias() {
+    node_id="$(
+        $CLN_BIN -k listchannels short_channel_id="$1" |
+        jq -r '.channels[].source' |
+        grep -v -F "$our_id"
+    )"
+    $CLN_BIN listnodes "$node_id" |
+    jq -r '.nodes[].alias'
+}
+
+jq_inside="\(.short_channel_id) \(.id) \(.expiry) \(.direction) \(.amount_msat) \(.payment_hash) \(.state)"
+if [ "$number" = "all" ]; then
+    jq_argument=$(cat << EOF
+.htlcs[] | "$jq_inside"
+EOF
+    )
+else
+    jq_argument=$(cat << EOF
+.htlcs[-${number}:][] | "$jq_inside"
+EOF
+    )
+fi
+
+$CLN_BIN listhtlcs "$@" |
+jq -r "$jq_argument" |
+while read -r line; do
+    short_channel_id="$(echo "$line" | cut -d " " -f 1)"
+    id="$(echo "$line" | cut -d " " -f 2)"
+    expiry="$(echo "$line" | cut -d " " -f 3)"
+    direction="$(echo "$line" | cut -d " " -f 4)"
+    amount_msat="$(echo "$line" | cut -d " " -f 5)"
+    payment_hash="$(echo "$line" | cut -d " " -f 6)"
+    state="$(echo "$line" | cut -d " " -f 7)"
+
+    amount_sat="$(echo "$amount_msat" | cut -d "m" -f 1 | msat_to_sat)"
+
+    printf "%-3s %9s %7s %6s %-15s %-26s" \
+        "$direction" "$amount_sat" \
+        "$expiry" "$id" \
+        "$short_channel_id" \
+        "$state"
+    if [ "$print_hash" = true ]; then
+        printf " %s" "$payment_hash"
+    fi
+    if [ "$print_alias" = true ]; then
+        alias="$(lightning_node_alias "$short_channel_id")"
+
+        printf " %s" "$alias"
+    fi
+    printf "\n"
+done

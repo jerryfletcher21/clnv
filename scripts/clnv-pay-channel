@@ -1,0 +1,39 @@
+#!/bin/sh
+
+# https://gist.github.com/daywalker90/5711da9ddce71a6e5560c5b9c8f4a449
+
+info=$(cat << EOF
+clnv pay-channel short-channel-id arguments-for-pay
+
+pay through a channel
+EOF
+)
+
+if [ "$#" -lt 1 ]; then
+    echo "error: insert short channel id" >&2
+    exit 1
+fi
+
+case "$1" in
+    -h|--help)
+        echo "$info"
+        exit 0
+    ;;
+esac
+
+channel="$1"
+shift 1
+
+if [ "$#" -lt 1 ]; then
+    echo "error: insert arguments for pay" >&2
+    exit 1
+fi
+
+scids_array="$(
+    $CLN_BIN listpeerchannels |
+    jq -r --arg channel "$channel" '.channels[].short_channel_id | select(. != $channel)' |
+    awk '{printf "\"%s/0\",\"%s/1\",", $0, $0}' |
+    sed 's/,$//'
+)"
+
+$CLN_BIN -k pay "$@" exclude="[$scids_array]"

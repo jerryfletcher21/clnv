@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+
+# source this file in ~/.bashrc
+# if the bash completion package is installed there are better completions
+# complete -F __clnv_completion <script-name>
+
+__clnv_completion() {
+    local ifs_original="$IFS"
+    local ifs_newline='
+'
+
+    ___multiple_options_handle() {
+        # if it is the correct spot to include the options
+        # (they are not already inserted, or the last word is one of
+        # options) will print the possible options and return 0
+        # if instead it is not the correct position, so there are other
+        # arguments after the options, it will print the number of other
+        # arguments after the last option
+
+        # options is multiline
+        # in every line there are multiple options separated by spaces
+        # for the same option for example -h --help
+
+        local options="$1"
+        shift 1
+        local words=("$@")
+
+        local multi_option found option i word
+
+        local opts=""
+
+        local number_arguments=0
+
+        if [ "${#words[@]}" -lt 2 ]; then
+            printf "%s\n" "$number_arguments"
+            return 1
+        fi
+
+        case "${words[${#words[@]}-1]}" in
+        *=)
+            printf "%s\n" "$number_arguments"
+            return 1
+        ;;
+        esac
+
+        for ((i = "${#words[@]}" - 2; i >= 0; i--)); do
+            word="${words[i]}"
+
+            found=false
+
+            IFS="$ifs_newline"
+            for multi_option in $options; do
+                IFS="$ifs_original"
+
+                for option in $multi_option; do
+                    if [ "${word%%=*}" = "${option%=}" ]; then
+                        found=true
+                        break
+                    fi
+                done
+                if [ "$found" = true ]; then
+                    break
+                fi
+
+                IFS="$ifs_newline"
+            done
+            IFS="$ifs_original"
+
+            if [ "$found" = false ]; then
+                number_arguments="$(( number_arguments + 1 ))"
+            else
+                break
+            fi
+        done
+
+        if
+            [ "$number_arguments" -gt 0 ] &&
+            [ "$(( number_arguments + 1 ))" -lt "${#words[@]}" ]
+        then
+            printf "%s\n" "$number_arguments"
+            return 1
+        fi
+
+        IFS="$ifs_newline"
+        for multi_option in $options; do
+            IFS="$ifs_original"
+
+            found=false
+            for option in $multi_option; do
+                for ((i = 2; i < "${#words[@]}" - 1; i++)); do
+                    word="${words[i]}"
+                    if [ "${word%%=*}" = "${option%=}" ]; then
+                        found=true
+                        break
+                    fi
+                done
+                if [ "$found" = true ]; then
+                    break
+                fi
+            done
+            if [ "$found" = false ]; then
+                for option in $multi_option; do
+                    opts="$opts
+$option"
+                done
+            fi
+
+            IFS="$ifs_newline"
+        done
+        IFS="$ifs_original"
+
+        printf "%s\n" "$opts"
+        return 0
+    }
+
+    # shellcheck disable=SC2034
+    local cur prev words=() cword
+
+    # if bash completion is sourced
+    if [ "$(type -t _get_comp_words_by_ref 2>/dev/null)" = "function" ]; then
+        _get_comp_words_by_ref -n = cur prev words cword
+
+        advanced_completion=true
+    else
+        cur="$2"
+        # prev="$3"
+        words=("${COMP_WORDS[@]}")
+        cword="$COMP_CWORD"
+
+        advanced_completion=false
+    fi
+
+    OPTS=""
+
+    clnv="${XDG_DATA_HOME:-${XDG_LOCAL_HOME:-$HOME/.local}/share}/clnv/clnv"
+    if [ ! -f "$clnv" ]; then
+        return 0
+    fi
+
+    if [ "${cword}" -eq 1 ]; then
+        OPTS="-h
+--help
+$($clnv list-actions)"
+    else
+        local action="${words[1]}"
+
+        local new_options
+
+        case "$action" in
+        list-channels)
+            if new_options="$(
+                ___multiple_options_handle \
+"-a --all
+-p --pending
+--no-address" \
+                    "${words[@]}"
+            )"; then
+                OPTS="$new_options"
+            fi
+        ;;
+        list-htlcs)
+            if new_options="$(
+                ___multiple_options_handle \
+"--no-hash
+--alias" \
+                    "${words[@]}"
+            )"; then
+                OPTS="$new_options"
+            fi
+        ;;
+        list-invoices)
+            if new_options="$(
+                ___multiple_options_handle \
+"--small --big --all
+--long
+--bolt" \
+                    "${words[@]}"
+            )"; then
+                OPTS="$new_options"
+                current_argument=0
+            else
+                current_argument="$new_options"
+            fi
+            if [ "$current_argument" -eq 0 ]; then
+                OPTS="$OPTS
+all"
+            elif [ "$current_argument" -eq 1 ]; then
+                OPTS="$OPTS
+unpaid
+paid
+expired
+all"
+            fi
+        ;;
+        list-pays)
+            if new_options="$(
+                ___multiple_options_handle \
+"--self
+--description
+--hash
+--bolt" \
+                    "${words[@]}"
+            )"; then
+                OPTS="$new_options"
+                current_argument=0
+            else
+                current_argument="$new_options"
+            fi
+            if [ "$current_argument" -eq 0 ]; then
+                OPTS="$OPTS
+all"
+            elif [ "$current_argument" -eq 1 ]; then
+                OPTS="$OPTS
+complete
+pending
+complete-pending
+failed
+all"
+            fi
+        ;;
+        set-fee)
+            if [ "$advanced_completion" = true ]; then
+                case "$prev" in
+                "$action"|--ignore-channel=*)
+                    case "$cur" in
+                    --ignore-channel=*) ;;
+                    *)
+                        OPTS="--ignore-channel="
+                    ;;
+                    esac
+                esac
+                if new_options="$(
+                    ___multiple_options_handle \
+"feebase=
+feeppm=" \
+                        "${words[@]}"
+                )"; then
+                    OPTS="$OPTS
+$new_options"
+                fi
+            fi
+        ;;
+        esac
+    fi
+
+    if [ -n "$OPTS" ]; then
+        # complete with ignorecase and multi words
+        IFS="$ifs_newline"
+        # shellcheck disable=SC2207
+        COMPREPLY=($(
+            printf "%s\n" "$OPTS" |
+            awk -v IGNORECASE=1 -v p="$cur" 'p==substr($0,0,length(p))'
+        ))
+        IFS="$ifs_original"
+
+        # do not put a space when the completion ends with an equal
+        for word in "${COMPREPLY[@]}"; do
+            case "$word" in
+            *=)
+                compopt -o nospace
+            ;;
+            esac
+        done
+    fi
+}

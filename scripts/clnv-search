@@ -1,0 +1,34 @@
+#!/bin/sh
+
+info=$(cat << EOF
+clnv search search-element
+
+search in listpays and listinvoices
+EOF
+)
+
+if [ "$#" -lt 1 ]; then
+    echo "error: insert search element" >&2
+    exit 1
+fi
+search="$1"
+shift 1
+
+case "$search" in
+    -h|--help)
+        echo "$info"
+        exit 0
+    ;;
+esac
+
+"$CLNV_HOME/scripts/clnv-list-pays" all | grep -F "$search"
+pays_return_status="$?"
+
+"$CLNV_HOME/scripts/clnv-list-invoices" all | grep -F "$search"
+invoices_return_status="$?"
+
+if [ "$pays_return_status" -eq 0 ] || [ "$invoices_return_status" -eq 0 ]; then
+    exit 0
+else
+    exit 1
+fi

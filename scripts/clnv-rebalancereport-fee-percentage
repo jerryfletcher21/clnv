@@ -1,0 +1,38 @@
+#!/bin/sh
+
+info=$(cat << EOF
+clnv rebalancereport-fee-percentage
+
+percentage stats from rebalance plugin
+EOF
+)
+
+if [ "$#" -ge 1 ]; then
+    case "$1" in
+        -h|--help)
+            echo "$info"
+            exit 0
+        ;;
+    esac
+fi
+
+add_zero_before_decimal() {
+    _number="$(cat)"
+    case "$_number" in
+        .*)
+            echo "0${_number}"
+        ;;
+        *)
+            echo "$_number"
+        ;;
+    esac
+}
+
+$CLN_BIN rebalancereport |
+jq -r '. | "\(.total_rebalanced_amount) \(.total_rebalance_fee)"' |
+while read -r line; do
+    amount="$(echo "$line" | cut -d "m" -f 1)"
+    fee="$(echo "$line" | cut -d " " -f 2 | cut -d "m" -f 1)"
+
+    echo "scale=3; ($fee / $amount) * 100" | bc | add_zero_before_decimal
+done

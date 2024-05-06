@@ -1,0 +1,81 @@
+#!/bin/sh
+
+info=$(cat << EOF
+clnv set-fee [[--ignore-channel=<channel-id>]...] [feebase=...] [feeppm=...]
+
+set fees in channels using setchannel
+EOF
+)
+
+ignore_channels=""
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            echo "$info"
+            exit 0
+        ;;
+        --ignore-channel=*)
+            channel_id="$(printf "%s\n" "$1" | cut -d "=" -f 2-)"
+            ignore_channels="$ignore_channels $channel_id"
+        ;;
+        -*)
+            echo "error: option $1 not recognized" >&2
+            exit 1
+        ;;
+    esac
+done
+
+if [ "$#" -eq 0 ]; then
+    echo "error: feebase and/or feeppm required" >&2
+    exit 1
+fi
+new_base_fee=false
+new_ppm_fee=false
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        feebase=*)
+            new_base_fee="$(echo "$1" | cut -d "=" -f 2-)"
+        ;;
+        feeppm=*)
+            new_ppm_fee="$(echo "$1" | cut -d "=" -f 2-)"
+        ;;
+        *)
+            echo "error: $1 not recognized" >&2
+            exit 1
+        ;;
+    esac
+    shift 1
+done
+
+$CLN_BIN listpeerchannels |
+jq -r '.channels[] | "\(.channel_id)\n\(.state)\n\(.fee_base_msat)\n\(.fee_proportional_millionths)"' |
+while true; do
+    read -r channel_id || break
+    read -r state || break
+    read -r source_base_fee || break
+    read -r source_ppm_fee || break
+
+    if [ "$state" != "CHANNELD_NORMAL" ]; then
+        continue
+    fi
+    for ignore_channel_id in $ignore_channels; do
+        if [ "$ignore_channel_id" = "$channel_id" ]; then
+            continue
+        fi
+    done
+
+    update_fee=false
+    set -- id="$channel_id"
+    if [ "$new_base_fee" != false ] && [ "$source_base_fee" != "$new_base_fee" ]; then
+        set -- "$@" feebase="$new_base_fee"
+        update_fee=true
+    fi
+    if [ "$new_ppm_fee" != false ] && [ "$source_ppm_fee" != "$new_ppm_fee" ]; then
+        set -- "$@" feeppm="$new_ppm_fee"
+        update_fee=true
+    fi
+    if [ "$update_fee" = true ]; then
+        $CLN_BIN -k setchannel "$@"
+    fi
+done
