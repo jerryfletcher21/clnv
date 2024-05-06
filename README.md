@@ -6,6 +6,8 @@ scripts.
 Most scripts are for visualizing the output of cln (hence the name
 clnv[isualizer]), converting the json output into tables easier to read.
 
+| Action | Description |
+| --- | --- |
 | `list-channels` | visualizer for listchannels |
 | `list-closed-channels` | visualizer for listclosedchannels |
 | `list-forwards` | visualizer for listforwards |
