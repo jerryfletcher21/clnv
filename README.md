@@ -34,15 +34,15 @@ export CLN_BIN=<lightning-cli-bin>
 
 To install it so that can be used from everywhere.
 
-Will install scripts in ~/.local/share/clnv and a simple wrapper around
-clnv that sets CLN_BIN named <name-of-the-script> in ~/.local/bin
+Will install scripts in `~/.local/share/clnv` and a simple wrapper around
+clnv that sets `CLN_BIN` named `<name-of-the-script>` in `~/.local/bin`
 ```
 CLNV_NAME=<name-of-the-script> CLN_BIN=<lightning-cli-bin> make install
 
 <name-of-the-script> --help
 ```
-Then <name-of-the-script> can be executed from everywhere (if
-~/.local/bin is in your PATH)
+Then `<name-of-the-script>` can be executed from everywhere (if
+`~/.local/bin` is in your `PATH`)
 
 If you have multiple core lightning in the same machine:
 ```
@@ -54,7 +54,7 @@ CLNV_NAME=<name-of-the-second-script> CLN_BIN=<second-lightning-cli-bin> make in
 <name-of-the-second-script> --help
 ```
 
-Source completions/clnv.bash-completion in ~/.bashrc
+Source completions/clnv.bash-completion in `~/.bashrc`
 
 If the bash completion package is installed there are better completions
 
