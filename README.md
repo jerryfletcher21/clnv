@@ -1,7 +1,7 @@
 # clnv
 
 Some [core lightning](https://github.com/ElementsProject/lightning)
-scripts.
+scripts. All sh scripts are posix compliant.
 
 Most scripts are for visualizing the output of cln (hence the name
 clnv[isualizer]), converting the json output into tables easier to read.
@@ -44,7 +44,9 @@ CLNV_NAME=<name-of-the-script> CLN_BIN=<lightning-cli-bin> make install
 Then `<name-of-the-script>` can be executed from everywhere (if
 `~/.local/bin` is in your `PATH`)
 
-If you have multiple core lightning in the same machine:
+If you have multiple core lightning in the same machine, or the same
+binary with different arguments, for example mainnet and testnet
+(`CLN_BIN="<lightning-cli> --testnet"`):
 ```
 make install-data
 CLNV_NAME=<name-of-the-first-script> CLN_BIN=<first-lightning-cli-bin> make install-script

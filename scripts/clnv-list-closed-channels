@@ -30,7 +30,7 @@ msat_to_sat() {
 
 lightning_node_alias() {
     if [ "$1" != "null" ]; then
-        $CLN_NODE listnodes "$1" |
+        $CLN_BIN listnodes "$1" |
         jq -r '.nodes[].alias' |
         tr -d -c '[:print:]'
     else

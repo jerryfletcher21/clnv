@@ -36,8 +36,13 @@ def subprocess_run_command(program, print_error=True):
 
 def cln_list_forwards():
     """run cln listforwards"""
+
     cln_bin = os.getenv("CLN_BIN")
-    cln_list_forwards_command = [cln_bin, "listforwards"]
+    if cln_bin is None:
+        print("CLN_BIN not set", file=sys.stderr)
+        return False
+    cln_list_forwards_command = cln_bin.split() + ["listforwards"]
+
     output = subprocess_run_command(cln_list_forwards_command)
     if output is False:
         print(f"error: running {cln_bin} listforwards", file=sys.stderr)
