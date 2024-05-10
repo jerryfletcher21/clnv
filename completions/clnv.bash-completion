@@ -113,7 +113,6 @@ $option"
         return 0
     }
 
-    # shellcheck disable=SC2034
     local cur prev words=() cword
 
     # if bash completion is sourced

@@ -48,7 +48,8 @@ clnv_install_script() {
         echo "error: set CLN_BIN" >&2
         exit 1
     fi
-    if ! command -v "$CLN_BIN" >/dev/null 2>&1; then
+    # shellcheck disable=SC2086
+    if ! command -v $CLN_BIN >/dev/null 2>&1; then
         echo "error: $CLN_BIN is not a command" >&2
         exit 1
     fi
