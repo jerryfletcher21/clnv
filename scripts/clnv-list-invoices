@@ -111,7 +111,11 @@ jq_argument=$(cat << EOF
 EOF
 )
 
-$CLN_BIN listinvoices |
+if [ ! -t 0 ]; then
+    cat
+else
+    $CLN_BIN listinvoices
+fi |
 jq -r "$jq_argument" |
 while read -r line; do
     status="$(printf "%s\n" "$line" | cut -d " " -f 1)"

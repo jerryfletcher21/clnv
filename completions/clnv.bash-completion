@@ -15,7 +15,7 @@ __clnv_completion() {
         # options) will print the possible options and return 0
         # if instead it is not the correct position, so there are other
         # arguments after the options, it will print the number of other
-        # arguments after the last option
+        # arguments after the last option and return 1
 
         # options is multiline
         # in every line there are multiple options separated by spaces

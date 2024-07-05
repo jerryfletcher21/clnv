@@ -3,8 +3,7 @@
 info=$(cat << EOF
 clnv list-funds
 
-visualizer for listmempoolfunds (plugin)
-requires listmempoolfunds
+visualizer for listfunds or listmempoolfunds if the plugin is present
 EOF
 )
 
@@ -22,7 +21,13 @@ msat_to_sat() {
     echo "$msat / (10 ^ 3)" | bc
 }
 
-$CLN_BIN listmempoolfunds |
+if $CLN_BIN plugin list 2>/dev/null | grep -F listmempoolfunds >/dev/null 2>&1; then
+    action="listmempoolfunds"
+else
+    action="listfunds"
+fi
+
+$CLN_BIN "$action" |
 jq -r '.outputs[] | "\(.txid) \(.output) \(.amount_msat) \(.address) \(.status) \(.blockheight)"' |
 while read -r line; do
     txid="$(printf "%s\n" "$line" | cut -d " " -f 1)"

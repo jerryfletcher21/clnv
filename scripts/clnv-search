@@ -21,14 +21,40 @@ case "$search" in
     ;;
 esac
 
-"$CLNV_HOME/scripts/clnv-list-pays" all | grep -F "$search"
-pays_return_status="$?"
+jq_search_any() {
+    cat << EOF
+.${1} |= map(select(any(.[]; tostring | contains("${2}"))))
+EOF
+}
 
-"$CLNV_HOME/scripts/clnv-list-invoices" all | grep -F "$search"
-invoices_return_status="$?"
+pays_found="$(
+    $CLN_BIN listpays |
+    jq -r "$(jq_search_any "pays" "$search")"
+)"
+pays_found_len="$(
+    printf "%s\n" "$pays_found" |
+    jq -r ".pays | length"
+)"
+if [ "$pays_found_len" -gt 0 ]; then
+    printf "%s\n" "$pays_found" |
+    "$CLNV_HOME/scripts/clnv-list-pays"
+fi
 
-if [ "$pays_return_status" -eq 0 ] || [ "$invoices_return_status" -eq 0 ]; then
-    exit 0
-else
+invoices_found="$(
+    $CLN_BIN listinvoices |
+    jq -r "$(jq_search_any "invoices" "$search")"
+)"
+invoices_found_len="$(
+    printf "%s\n" "$invoices_found" |
+    jq -r ".invoices | length"
+)"
+if [ "$invoices_found_len" -gt 0 ]; then
+    printf "%s\n" "$invoices_found" |
+    "$CLNV_HOME/scripts/clnv-list-invoices"
+fi
+
+if [ "$pays_found_len" -eq 0 ] && [ "$invoices_found_len" -eq 0 ]; then
     exit 1
 fi
+
+exit 0

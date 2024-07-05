@@ -39,7 +39,7 @@ def cln_list_forwards():
 
     cln_bin = os.getenv("CLN_BIN")
     if cln_bin is None:
-        print("CLN_BIN not set", file=sys.stderr)
+        print("error: CLN_BIN not set", file=sys.stderr)
         return False
     cln_list_forwards_command = cln_bin.split() + ["listforwards"]
 

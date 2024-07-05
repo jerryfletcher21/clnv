@@ -78,21 +78,29 @@ percentage_from_ppm() {
     printf "%.4f%%\n" "$(echo "scale=4; $1 / 10000" | bc)"
 }
 
-msat_to_sat() {
-    msat="$(cat)"
-    if [ "$msat" = "null" ]; then
-        echo "$msat"
-    else
-        echo "scale=3; $msat / (10 ^ 3)" | bc | add_zero_before_decimal
-    fi
-}
-
 msat_to_sat_round() {
     msat="$(cat)"
     if [ "$msat" = "null" ]; then
         echo "$msat"
     else
         echo "scale=0; $msat / (10 ^ 3)" | bc | add_zero_before_decimal
+    fi
+}
+
+msat_to_sat() {
+    msat="$(cat)"
+    if [ "$msat" = "null" ]; then
+        echo "$msat"
+    else
+        result="$(
+            echo "scale=3; $msat / (10 ^ 3)" |
+            bc |
+            add_zero_before_decimal
+        )"
+        if [ "$(printf "%s" "$result" | wc -c)" -gt 8 ]; then
+            result="$(printf "%s\n" "$msat" | msat_to_sat_round)"
+        fi
+        echo "$result"
     fi
 }
 
@@ -174,9 +182,9 @@ while true; do
     fi
 
     if [ "$address" = true ]; then
-        printf "%s %s \n" "$destination" "$dest_alias_cut"
+        printf "%s %s\n" "$destination" "$dest_alias_cut"
     else
-        printf "%s \n" "$dest_alias"
+        printf "%s\n" "$dest_alias"
     fi
 done |
 sort

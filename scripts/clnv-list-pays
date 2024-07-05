@@ -79,12 +79,12 @@ else
 fi
 
 if [ "$#" -gt 0 ]; then
-    status="$1"
+    target_status="$1"
     shift 1
-    case "$status" in
+    case "$target_status" in
         complete|pending|complete-pending|failed|all)
             if [ "$CLNV_PRIVATE" = true ]; then
-                case "$status" in
+                case "$target_status" in
                     pending|all)
                         echo "error: pending/all payments can not be shown in private mode" >&2
                         exit 1
@@ -93,12 +93,15 @@ if [ "$#" -gt 0 ]; then
             fi
         ;;
         *)
-            echo "error: $status can only be complete, pending, complete-pending, failed, all" >&2
+            printf "%s%s\n" \
+                "error: $target_status can only be " \
+                "complete, pending, complete-pending, failed, all" \
+                >&2
             exit 1
         ;;
     esac
 else
-    status="$default_status"
+    target_status="$default_status"
 fi
 
 timestamp_to_date() {
@@ -133,24 +136,56 @@ EOF
 
 our_id="$($CLN_BIN getinfo | jq -r '.id')"
 
-case "$status" in
-    complete|pending|failed)
-        $CLN_BIN -k listpays status="$status"
-    ;;
-    complete-pending)
-        $CLN_BIN -k listpays status=complete
-        if [ "$CLNV_PRIVATE" = false ]; then
-            $CLN_BIN -k listpays status=pending
-        fi
-    ;;
-    all)
-        $CLN_BIN listpays
-    ;;
-esac |
+if [ ! -t 0 ]; then
+    check_status_again=true
+else
+    check_status_again=false
+fi
+
+if [ ! -t 0 ]; then
+    cat
+else
+    case "$target_status" in
+        complete|pending|failed)
+            $CLN_BIN -k listpays status="$target_status"
+        ;;
+        complete-pending)
+            $CLN_BIN -k listpays status=complete
+            if [ "$CLNV_PRIVATE" = false ]; then
+                $CLN_BIN -k listpays status=pending
+            fi
+        ;;
+        all)
+            $CLN_BIN listpays
+        ;;
+    esac
+fi |
 jq -r "$jq_argument" |
 while read -r line; do
-    if [ "$print_self" = true ] || [ "$(echo "$line" | cut -d " " -f 2)" != "$our_id" ]; then
-        printf "%s\n" "$line"
+    status="$(echo "$line" | cut -d " " -f 1)"
+    destination_id="$(echo "$line" | cut -d " " -f 2)"
+    if [ "$print_self" = true ] || [ "$destination_id" != "$our_id" ]; then
+        if [ "$check_status_again" = true ]; then
+            case "$target_status" in
+                complete|pending|failed)
+                    if [ "$status" = "$target_status" ]; then
+                        printf "%s\n" "$line"
+                    fi
+                ;;
+                complete-pending)
+                    case "$status" in
+                        complete|pending)
+                            printf "%s\n" "$line"
+                        ;;
+                    esac
+                ;;
+                all)
+                    printf "%s\n" "$line"
+                ;;
+            esac
+        else
+            printf "%s\n" "$line"
+        fi
     fi
 done |
 if [ "$number" != "all" ]; then
@@ -160,7 +195,6 @@ else
 fi |
 while read -r line; do
     status="$(echo "$line" | cut -d " " -f 1)"
-
     destination_id="$(echo "$line" | cut -d " " -f 2)"
     amount_sent_msat="$(echo "$line" | cut -d " " -f 3)"
     created_at_timestamp="$(echo "$line" | cut -d " " -f 4)"

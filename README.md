@@ -11,7 +11,7 @@ clnv[isualizer]), converting the json output into tables easier to read.
 | `list-channels` | visualizer for listchannels |
 | `list-closed-channels` | visualizer for listclosedchannels |
 | `list-forwards` | visualizer for listforwards |
-| `list-funds` | visualizer for listmempoolfunds (plugin) |
+| `list-funds` | visualizer for listfunds or listmempoolfunds if present |
 | `list-htlcs` | visualizer for listhtlcs |
 | `list-invoices` | visualizer for listinvoices |
 | `list-pays` | visualizer for listpays |
