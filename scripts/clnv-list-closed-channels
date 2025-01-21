@@ -41,7 +41,7 @@ lightning_node_alias() {
 # '.closedchannels[].peer_id // ""'
 
 $CLN_BIN listclosedchannels |
-jq -r '.closedchannels[] | "\(.peer_id)\n\(.short_channel_id)\n\(.opener)\n\(.closer)\n\(.private)\n\(.total_msat)\n\(.final_to_us_msat)\n\(.close_cause)"' |
+jq -r '.closedchannels[] | "\(.peer_id)\n\(.short_channel_id)\n\(.opener)\n\(.closer)\n\(.private)\n\(.total_msat)\n\(.final_to_us_msat)\n\(.close_cause)\n\(.last_stable_connection)"' |
 while true; do
     read -r peer_id || break
     read -r short_channel_id || break
@@ -51,14 +51,22 @@ while true; do
     read -r total_msat || break
     read -r final_to_us_msat || break
     read -r close_cause || break
+    read -r last_stable_connection || break
 
     if [ "$CLNV_PRIVATE" = true ] && [ "$private_status" = true ]; then
         continue
     fi
 
-    printf "%-66s %-15s %10s %10s %-6s %-6s %1s %-8s %s\n" \
-        "$peer_id" "$short_channel_id" \
+    if [ "$last_stable_connection" != "null" ]; then
+        last_stable_connection="$(date -d @"$last_stable_connection" +"%Y/%m/%d %H:%M:%S")"
+    else
+        last_stable_connection="0          0"
+    fi
+
+    printf "%-66s %-19s %-15s %10s %10s %-6s %-6s %1s %-8s %s\n" \
+        "$peer_id" "$last_stable_connection" "$short_channel_id" \
         "$(msat_to_sat "$total_msat")" "$(msat_to_sat "$final_to_us_msat")" \
         "$opener" "$closer" "$(bool_string_to_number "$private_status")" "$close_cause" \
         "$(lightning_node_alias "$peer_id")"
-done
+done |
+sort -k 2,4

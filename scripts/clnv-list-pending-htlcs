@@ -65,13 +65,16 @@ while true; do
 
     difference="$(( expiry - block_count ))"
 
-    label="$(lightning_list_pay_label "$payment_hash")"
+    labels="$(lightning_list_pay_label "$payment_hash")"
+    number_labels="$(printf "%s\n" "$labels" | wc -l)"
+    first_label="$(printf "%s\n" "$labels" | head -n 1)"
 
     node_alias="$(lightning_node_alias "$peer_id")"
 
-    printf "%-7s %5s %9s %-3s %-24s %s\n" \
+    printf "%-7s %5s %9s %-3s %-24s %3d %s\n" \
         "$expiry" "$difference" \
         "$amount_sat" "$direction" \
-        "$(printf "%s\n" "$node_alias" | cut -b -24)" "$label"
+        "$(printf "%s\n" "$node_alias" | cut -b -24)" \
+        "$number_labels" "$first_label"
 done |
 sort -n
