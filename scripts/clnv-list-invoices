@@ -5,7 +5,7 @@ number=32
 invoice_status="all"
 
 info=$(cat << EOF
-clnv list-invoices [--small, --big, --all] [--long] [--bolt] [number/all] [status]
+clnv list-invoices [--small, --big, --all] [--long] [--hash] [--preimage] [--bolt] [number/all] [status]
 
 visualizer for listinvoices
 
@@ -35,6 +35,8 @@ is_uint_greater_than_zero_or_all() {
 min_sats=8
 
 print_long_description=false
+print_hash=false
+print_preimage=false
 print_bolt=false
 
 while [ "$#" -gt 0 ]; do
@@ -48,6 +50,12 @@ while [ "$#" -gt 0 ]; do
         ;;
         --long)
             print_long_description=true
+        ;;
+        --hash)
+            print_hash=true
+        ;;
+        --preimage)
+            print_preimage=true
         ;;
         --bolt)
             if [ "$CLNV_PRIVATE" = true ]; then
@@ -105,7 +113,7 @@ msat_to_sat() {
     fi
 }
 
-jq_inside="\(.status) \(.amount_msat) \(.amount_received_msat) \(.paid_at) \(.bolt11) \(.label) \(.description)"
+jq_inside="\(.status)\t\(.amount_msat)\t\(.amount_received_msat)\t\(.paid_at)\t\(.bolt11)\t\(.payment_hash)\t\(.payment_preimage)\t\(.label)\t\(.description)"
 jq_argument=$(cat << EOF
 .invoices[] | "$jq_inside"
 EOF
@@ -118,7 +126,7 @@ else
 fi |
 jq -r "$jq_argument" |
 while read -r line; do
-    status="$(printf "%s\n" "$line" | cut -d " " -f 1)"
+    status="$(printf "%s\n" "$line" | cut -d "	" -f 1)"
     case "$invoice_status" in
         all|"$status")
             printf "%s\n" "$line"
@@ -126,9 +134,9 @@ while read -r line; do
     esac
 done |
 while read -r line; do
-    sat="$(printf "%s\n" "$line" | cut -d " " -f 2 | cut -d "m" -f 1 | msat_to_sat)"
+    sat="$(printf "%s\n" "$line" | cut -d "	" -f 2 | cut -d "m" -f 1 | msat_to_sat)"
     if [ "$sat" -eq 0 ]; then
-        sat="$(printf "%s\n" "$line" | cut -d " " -f 3 | cut -d "m" -f 1 | msat_to_sat)"
+        sat="$(printf "%s\n" "$line" | cut -d "	" -f 3 | cut -d "m" -f 1 | msat_to_sat)"
     fi
     case "$invoice_type" in
         all)
@@ -152,13 +160,15 @@ else
     cat
 fi |
 while read -r line; do
-    status="$(echo "$line" | cut -d " " -f 1)"
-    amount_msat="$(echo "$line" | cut -d " " -f 2)"
-    amount_received_msat="$(echo "$line" | cut -d " " -f 3)"
-    paid_at_timestamp="$(echo "$line" | cut -d " " -f 4)"
-    bolt11="$(echo "$line" | cut -d " " -f 5)"
-    label="$(echo "$line" | cut -d " " -f 6)"
-    description="$(echo "$line" | cut -d " " -f 7-)"
+    status="$(echo "$line" | cut -d "	" -f 1)"
+    amount_msat="$(echo "$line" | cut -d "	" -f 2)"
+    amount_received_msat="$(echo "$line" | cut -d "	" -f 3)"
+    paid_at_timestamp="$(echo "$line" | cut -d "	" -f 4)"
+    bolt11="$(echo "$line" | cut -d "	" -f 5)"
+    payment_hash="$(echo "$line" | cut -d "	" -f 6)"
+    payment_preimage="$(echo "$line" | cut -d "	" -f 7)"
+    label="$(echo "$line" | cut -d "	" -f 8)"
+    description="$(echo "$line" | cut -d "	" -f 9-)"
 
     amount_sat="$(echo "$amount_msat" | cut -d "m" -f 1 | msat_to_sat)"
     amount_received_sat="$(echo "$amount_received_msat" | cut -d "m" -f 1 | msat_to_sat)"
@@ -184,6 +194,12 @@ while read -r line; do
         "$status" "$amount_received_sat" "$fee" \
         "$created_at" "$paid_at" \
         "$label" "$description"
+    if [ "$print_hash" = true ]; then
+        printf "%s\n" "$payment_hash"
+    fi
+    if [ "$print_preimage" = true ]; then
+        printf "%s\n" "$payment_preimage"
+    fi
     if [ "$print_bolt" = true ]; then
         printf "%s\n" "$bolt11"
     fi

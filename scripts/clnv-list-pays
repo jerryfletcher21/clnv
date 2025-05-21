@@ -4,7 +4,7 @@ default_number=32
 default_status="complete-pending"
 
 info=$(cat << EOF
-clnv list-pays [--self] [--description] [--hash] [--bolt] [number/all] [status]
+clnv list-pays [--self] [--description] [--hash] [--preimage] [--bolt] [number/all] [status]
 
 visualizer for listpays
 
@@ -32,6 +32,7 @@ is_uint_greater_than_zero_or_all() {
 print_self=false
 print_description=false
 print_hash=false
+print_preimage=false
 print_bolt=false
 
 while [ "$#" -gt 0 ]; do
@@ -48,6 +49,9 @@ while [ "$#" -gt 0 ]; do
         ;;
         --hash)
             print_hash=true
+        ;;
+        --preimage)
+            print_preimage=true
         ;;
         --bolt)
             if [ "$CLNV_PRIVATE" = true ]; then
@@ -128,7 +132,7 @@ lightning_node_alias() {
     fi
 }
 
-jq_inside="\(.status) \(.destination) \(.amount_sent_msat) \(.created_at) \(.completed_at) \(.number_of_parts) \(.payment_hash) \(.bolt11) \(.label)"
+jq_inside="\(.status) \(.destination) \(.amount_sent_msat) \(.created_at) \(.completed_at) \(.number_of_parts) \(.payment_hash) \(.preimage) \(.bolt11) \(.label)"
 jq_argument=$(cat << EOF
 .pays[] | "$jq_inside"
 EOF
@@ -201,8 +205,9 @@ while read -r line; do
     completed_at_timestamp="$(echo "$line" | cut -d " " -f 5)"
     number_of_parts="$(echo "$line" | cut -d " " -f 6)"
     payment_hash="$(echo "$line" | cut -d " " -f 7)"
-    bolt11="$(echo "$line" | cut -d " " -f 8)"
-    label="$(echo "$line" | cut -d " " -f 9)"
+    preimage="$(echo "$line" | cut -d " " -f 8)"
+    bolt11="$(echo "$line" | cut -d " " -f 9)"
+    label="$(echo "$line" | cut -d " " -f 10-)"
 
     destination="$(lightning_node_alias "$destination_id")"
 
@@ -223,13 +228,16 @@ while read -r line; do
         label="a nice label"
     fi
 
-    printf "%-8s %9s %16s %16s %4s %-24s %s" \
+    printf "%-8s %9s %16s %16s %4s %-24s %s\n" \
         "$status" "$amount_sent_sat" \
         "$created_at" "$completed_at" \
         "$number_of_parts" \
         "$destination" "$label"
     if [ "$print_hash" = true ]; then
-        printf " %s" "$payment_hash"
+        printf "%s\n" "$payment_hash"
+    fi
+    if [ "$print_preimage" = true ]; then
+        printf "%s\n" "$preimage"
     fi
     if [ "$print_description" = true ]; then
         if [ "$CLNV_PRIVATE" = false ]; then
@@ -241,9 +249,8 @@ while read -r line; do
         else
             description="a nice description"
         fi
-        printf " %s" "$description"
+        printf "%s\n" "$description"
     fi
-    printf "\n"
     if [ "$print_bolt" = true ]; then
         printf "%s\n" "$bolt11"
     fi
