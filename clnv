@@ -55,6 +55,10 @@ case "$action" in
             exit 1
         fi
 
+        if [ -x "$HOME/.local/share/btcs/btcs" ]; then
+            export BTCS_HOME="$HOME/.local/share/btcs"
+        fi
+
         if [ -z "$CLNV_PRIVATE" ]; then
             export CLNV_PRIVATE=false
         fi

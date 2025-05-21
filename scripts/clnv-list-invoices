@@ -178,6 +178,8 @@ while read -r line; do
         description="a nice description"
     fi
 
+    label="$(echo "$label" | cut -b -100)"
+
     printf "%-8s %9s %9s %16s %16s %-64s %s\n" \
         "$status" "$amount_received_sat" "$fee" \
         "$created_at" "$paid_at" \

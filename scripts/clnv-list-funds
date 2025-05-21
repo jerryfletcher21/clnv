@@ -31,8 +31,19 @@ while read -r line; do
     status="$(printf "%s\n" "$line" | cut -d " " -f 5)"
     blockheight="$(printf "%s\n" "$line" | cut -d " " -f 6)"
 
+    # one of "unconfirmed", "confirmed", "spent", "immature"
+    short_status="$(printf "%s" "$status" | cut -c -2)"
+
     sat="$(printf "%s\n" "$amount_msat" | cut -d "m" -f 1 | msat_to_sat)"
 
-    printf "%-64s %4s %12s %-62s %7s %-11s\n" \
-        "$txid" "$output" "$sat" "$address" "$blockheight" "$status"
+    address_comment=""
+    if [ -d "$BTCS_HOME" ]; then
+        address_comment="$(
+            "$BTCS_HOME/scripts/btcs-comment" ad "$address" print 2>/dev/null |
+            cut -c -16
+        )"
+    fi
+
+    printf "%-64s %4s %12s %-62s %-2s %7s %s\n" \
+        "$txid" "$output" "$sat" "$address" "$short_status" "$blockheight" "$address_comment"
 done
